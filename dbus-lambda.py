@@ -67,8 +67,8 @@ class DbusLAMBDAService:
         # Create the mandatory objects
         self._dbusservice.add_path('/DeviceInstance', deviceinstance)
         self._dbusservice.add_path('/ProductId', 0xFFFF)
-        self._dbusservice.add_path('/ProductName', "Lamba Heatpump")
-        self._dbusservice.add_path('/CustomName', "Lamba Heatpump")
+        self._dbusservice.add_path('/ProductName', "Lamba Heat Pump")
+        self._dbusservice.add_path('/CustomName', "Lamba Heat Pump")
         self._dbusservice.add_path('/FirmwareVersion', "0")
         self._dbusservice.add_path('/Serial', "0")
         self._dbusservice.add_path('/HardwareVersion', self.model)
@@ -129,11 +129,11 @@ class DbusLAMBDAService:
         # BITS = ("bits", 0)
 
         for addr, format, factor, comment, unit in ( # data_type according to ModbusClientMixin.DATATYPE.value[0]
-            (1003, "H", 1, "Operating State", ""), # UINT16
-            (1004, "h", 0.01, "Flow Line Temperature", "°C"), # INT16
-            (1016, "h", 0.1, "Request Flow Line Temperature", "°C"), # INT16
-            (103, "h", 1, "Actual Power Consumption", "W"), # INT16
-            (1020, "i", 1, "Total Energy Consumption", "Wh"), # INT32
+            (1003, "H", 1,     "Operating State", ""), # UINT16, works
+            (1004, "h", 0.01,  "Flow Line Temperature", "°C"), # INT16, works
+            (1016, "h", 0.1,   "Request Flow Line Temperature", "°C"), # INT16, doesn't work
+            (103,  "h", 1,     "Actual Power Consumption", "W"), # INT16, works
+            (1020, "i", 0.001, "Total Energy Consumption", "kWh"), # INT32, works
         ):
             data_type = self._getDataType(format)
             count = data_type.value[1]
