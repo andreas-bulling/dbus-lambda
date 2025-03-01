@@ -1,0 +1,220 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# import normal packages
+import logging
+import platform
+import logging
+import sys
+import os
+import time
+import configparser # for config/ini file
+from enum import Enum
+from math import log10
+if sys.version_info.major == 2:
+    import gobject
+else:
+    from gi.repository import GLib as gobject
+
+# our own packages from victron
+sys.path.insert(1, os.path.join(os.path.dirname(__file__), '/opt/victronenergy/dbus-systemcalc-py/ext/velib_python'))
+from vedbus import VeDbusService
+
+from pymodbus.client import ModbusTcpClient
+from pymodbus.exceptions import ModbusException
+
+class DbusLAMBDAService:
+    def __init__(self, servicename, paths, productname='lambda', connection='LAMBDA ModBus Service'):
+        config = self._getConfig()
+        deviceinstance = int(config['DEFAULT']['Deviceinstance'])
+        self.host = str(config['DEFAULT']['Host'])
+        self.port = int(config['DEFAULT']['Port'])
+        self.acposition = int(config['DEFAULT']['Position'])
+        self.model = str(config['DEFAULT']['Model'])
+
+        self._dbusservice = VeDbusService("{}.http_{:02d}".format(servicename, deviceinstance))
+        self._paths = paths
+
+        logging.debug("%s /DeviceInstance = %d" % (servicename, deviceinstance))
+
+        # Create the management objects, as specified in the ccgx dbus-api document
+        self._dbusservice.add_path('/Mgmt/ProcessName', __file__)
+        self._dbusservice.add_path('/Mgmt/ProcessVersion', 'Unkown version, and running on Python ' + platform.python_version())
+        self._dbusservice.add_path('/Mgmt/Connection', connection)
+
+        # Create the mandatory objects
+        self._dbusservice.add_path('/DeviceInstance', deviceinstance)
+        self._dbusservice.add_path('/ProductId', 0xFFFF)
+        self._dbusservice.add_path('/ProductName', "Lamba Heatpump")
+        self._dbusservice.add_path('/CustomName', "Lamba Heatpump")
+        self._dbusservice.add_path('/FirmwareVersion', "0")
+        self._dbusservice.add_path('/Serial', "0")
+        self._dbusservice.add_path('/HardwareVersion', self.model)
+        self._dbusservice.add_path('/Connected', 1)
+        self._dbusservice.add_path('/UpdateIndex', 0)
+        self._dbusservice.add_path('/Position', self.acposition) # 0: ac out, 1: ac in
+
+        # add path values to dbus
+        for path, settings in self._paths.items():
+            self._dbusservice.add_path(path, settings['initial'], gettextcallback=settings['textformat'], writeable=True, onchangecallback=self._handlechangedvalue)
+
+        # last update
+        self._lastUpdate = 0
+
+        # add _update function 'timer'
+        gobject.timeout_add(250, self._update) # pause 250ms before the next request
+
+        # add _signOfLife 'timer' to get feedback in log every 5minutes
+        gobject.timeout_add(self._getSignOfLifeInterval()*60*1000, self._signOfLife)
+
+        # open ModBus connection to heatpump
+        self._client = ModbusTcpClient(self.host, port=self.port)
+        self._client.connect()
+        logging.info("ModBus connected")
+
+    def __del__(self):
+        # close ModBus connection
+        self._client.close()
+
+    def _getConfig(self):
+        config = configparser.ConfigParser()
+        config.read("%s/config.ini" % (os.path.dirname(os.path.realpath(__file__))))
+        return config
+    
+    def _getSignOfLifeInterval(self):
+        config = self._getConfig()
+        value = config['DEFAULT']['SignOfLifeLog']
+
+        if not value:
+            value = 0
+
+        return int(value)
+    
+    def _handlechangedvalue(self, path, value):
+        logging.critical("someone else updated %s to %s" % (path, value))
+        # TODO: handle changes
+
+    def getLAMBDAData(self):
+        # INT16 = ("h", 1)
+        # UINT16 = ("H", 1)
+        # INT32 = ("i", 2)
+        # UINT32 = ("I", 2)
+        # INT64 = ("q", 4)
+        # UINT64 = ("Q", 4)
+        # FLOAT32 = ("f", 2)
+        # FLOAT64 = ("d", 4)
+        # STRING = ("s", 0)
+        # BITS = ("bits", 0)
+
+        for addr, format, factor, comment, unit in ( # data_type according to ModbusClientMixin.DATATYPE.value[0]
+            (1003, "H", 1, "Operating State", ""), # UINT16
+            (1004, "h", 0.01, "Flow Line Temperature", "°C"), # INT16
+            (1016, "h", 0.1, "Request Flow Line Temperature", "°C"), # INT16
+            (103, "h", 1, "Actual Power Consumption", "W"), # INT16
+            (1020, "i", 1, "Total Energy Consumption", "Wh"), # INT32
+        ):
+            data_type = self._getDataType(format)
+            count = data_type.value[1]
+            var_type = data_type.name
+
+            logging.info(f"Reading {comment} ({var_type})...")
+            
+            try:
+                rr = self._client.read_holding_registers(address=addr, count=count, slave=1)
+            except ModbusException as exc:
+                logging.error(f"Modbus exception: {exc!s}")
+                continue
+        
+        value = self._client.convert_from_registers(rr.registers, data_type) * factor
+        if factor < 1:
+            value = round(value, int(log10(factor) * -1))
+        logging.info(f"Read {comment} = {value} {unit}")
+
+    def _getDataType(format: str) -> Enum:
+        """Return the ModbusTcpClient.DATATYPE according to the format"""
+        for data_type in ModbusTcpClient.DATATYPE:
+            if data_type.value[0] == format:
+                return data_type
+    
+    def _signOfLife(self):
+        logging.info("--- Start: sign of life ---")
+        logging.info("Last _update() call: %s" % (self._lastUpdate))
+        logging.info("Last '/Ac/Power': %s" % (self._dbusservice['/Ac/Power']))
+        logging.info("--- End: sign of life ---")
+        return True
+
+    def _update(self):
+        try:
+            # TODO: write to dbus
+            self.getLAMBDAData
+
+            # logging
+            logging.debug("Heatpump Consumption (/Ac/Power): %s" % (self._dbusservice['/Ac/Power']))
+            logging.debug("Heatpump Forward (/Ac/Energy/Forward): %s" % (self._dbusservice['/Ac/Energy/Forward']))
+            logging.debug("---")
+
+            # increment UpdateIndex - to show that new data is available
+            index = self._dbusservice['/UpdateIndex'] + 1  # increment index
+            if index > 255:   # maximum value of the index
+                index = 0       # overflow from 255 to 0
+            self._dbusservice['/UpdateIndex'] = index
+
+            # update lastupdate vars
+            self._lastUpdate = time.time()
+
+        except Exception as e:
+            logging.critical('Error at %s', '_update', exc_info=e)
+            logging.critical(e)
+
+        # return true, otherwise add_timeout will be removed from GObject - see docs http://library.isr.ist.utl.pt/docs/pygtk2reference/gobject-functions.html#function-gobject--timeout-add
+        return True
+
+
+def main():
+    # configure logging
+    logging.basicConfig(  format='%(asctime)s,%(msecs)d %(name)s %(levelname)s %(message)s',
+                          datefmt='%Y-%m-%d %H:%M:%S',
+                          level=logging.INFO,
+                          handlers=[
+                              logging.FileHandler("%s/current.log" % (os.path.dirname(os.path.realpath(__file__)))),
+                              logging.StreamHandler()
+                          ]
+                        )
+
+    try:
+        logging.info("Start")
+
+        from dbus.mainloop.glib import DBusGMainLoop
+        # Have a mainloop, so we can send/receive asynchronous calls to and from dbus
+        DBusGMainLoop(set_as_default=True)
+
+        # formatting
+        _kWh = lambda p, v: (str(round(v, 2)) + 'kWh')
+        _a = lambda p, v: (str(round(v, 1)) + 'A')
+        _w = lambda p, v: (str(round(v, 1)) + 'W')
+        _v = lambda p, v: (str(round(v, 1)) + 'V')
+        _degC = lambda p, v: (str(v) + '°C')
+        _s = lambda p, v: (str(v) + 's')
+        _n = lambda p, v: (str(v))
+
+        # start our main-service
+        hp_output = DbusLAMBDAService(
+          servicename='com.victronenergy.heatpump',
+          paths={
+            '/State': {'initial': 0, 'textformat': _n},
+            '/Temperature': {'initial': 0, 'textformat': _degC},
+            '/TargetTemperature': {'initial': 0, 'textformat': _degC},
+            '/Ac/Power': {'initial': 0, 'textformat': _w},
+            '/Ac/Energy/Forward': {'initial': 0, 'textformat': _kWh},
+          }
+        )
+
+        logging.info('Connected to dbus and switching over to gobject.MainLoop() (= event based)')
+        mainloop = gobject.MainLoop()
+        mainloop.run()
+    except Exception as e:
+        logging.critical('Error at %s', 'main', exc_info=e)
+
+if __name__ == "__main__":
+    main()
+
