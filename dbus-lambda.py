@@ -84,7 +84,7 @@ class DbusLAMBDAService:
         self._lastUpdate = 0
 
         # add _update function 'timer'
-        gobject.timeout_add(250, self._update) # pause 250ms before the next request
+        gobject.timeout_add(1000, self._update) # pause 250ms before the next request
 
         # add _signOfLife 'timer' to get feedback in log every 5minutes
         gobject.timeout_add(self._getSignOfLifeInterval()*60*1000, self._signOfLife)
@@ -116,43 +116,55 @@ class DbusLAMBDAService:
         logging.critical("someone else updated %s to %s" % (path, value))
         # TODO: handle changes
 
-    def getLAMBDAData(self):
-        # INT16 = ("h", 1)
-        # UINT16 = ("H", 1)
-        # INT32 = ("i", 2)
-        # UINT32 = ("I", 2)
-        # INT64 = ("q", 4)
-        # UINT64 = ("Q", 4)
-        # FLOAT32 = ("f", 2)
-        # FLOAT64 = ("d", 4)
-        # STRING = ("s", 0)
-        # BITS = ("bits", 0)
+    def getLAMBDAData(self, register):
+        if register == "state": # UINT16, works
+            addr = 1003
+            format = "H"
+            factor = 1
+            comment = "Operating State"
+            unit = ""
+        elif register == "temp": # INT16, works
+            addr = 1004
+            format = "h"
+            factor = 0.01
+            comment = "Flow Line Temperature"
+            unit = "°C"
+        elif register == "ttemp": # INT16, doesn't work
+            addr = 1016
+            format = "h"
+            factor = 0.1
+            comment = "Request Flow Line Temperature"
+            unit = "°C"
+        elif register == "power": # INT16, works
+            addr = 103
+            format = "h"
+            factor = 1
+            comment = "Power Consumption"
+            unit = "W"
+        elif register == "energy": # INT32, works
+            addr = 1020
+            format = "i"
+            factor = 0.001
+            comment = "Total Energy Consumption"
+            unit = "kWh"
+        
+        data_type = self._getDataType(format)
+        count = data_type.value[1]
+        var_type = data_type.name
 
-        for addr, format, factor, comment, unit in ( # data_type according to ModbusClientMixin.DATATYPE.value[0]
-            (1003, "H", 1,     "Operating State", ""), # UINT16, works
-            (1004, "h", 0.01,  "Flow Line Temperature", "°C"), # INT16, works
-            (1016, "h", 0.1,   "Request Flow Line Temperature", "°C"), # INT16, doesn't work
-            (103,  "h", 1,     "Actual Power Consumption", "W"), # INT16, works
-            (1020, "i", 0.001, "Total Energy Consumption", "kWh"), # INT32, works
-        ):
-            data_type = self._getDataType(format)
-            count = data_type.value[1]
-            var_type = data_type.name
-
-            logging.info(f"Reading {comment} ({var_type})...")
-            
-            try:
-                rr = self._client.read_holding_registers(address=addr, count=count, slave=1)
-            except ModbusException as exc:
-                logging.error(f"Modbus exception: {exc!s}")
-                continue
+        logging.debug(f"Reading {comment} ({var_type})...")
+        
+        try:
+            rr = self._client.read_holding_registers(address=addr, count=count, slave=1)
+        except ModbusException as exc:
+            logging.error(f"Modbus exception: {exc!s}")
         
         value = self._client.convert_from_registers(rr.registers, data_type) * factor
         if factor < 1:
             value = round(value, int(log10(factor) * -1))
-        logging.info(f"Read {comment} = {value} {unit}")
+        logging.info(f"{comment} = {value} {unit}")
 
-    def _getDataType(format: str) -> Enum:
+    def _getDataType(self, format: str) -> Enum:
         """Return the ModbusTcpClient.DATATYPE according to the format"""
         for data_type in ModbusTcpClient.DATATYPE:
             if data_type.value[0] == format:
@@ -167,12 +179,18 @@ class DbusLAMBDAService:
 
     def _update(self):
         try:
-            # TODO: write to dbus
-            self.getLAMBDAData
+            self._dbusservice['/State'] = self.getLAMBDAData("state")
+            self._dbusservice['/Temperature'] = self.getLAMBDAData("temp")
+            self._dbusservice['/TargetTemperature'] = self.getLAMBDAData("ttemp")
+            self._dbusservice['/Ac/Power'] = self.getLAMBDAData("power")
+            self._dbusservice['/Ac/Energy/Forward'] = self.getLAMBDAData("energy")
 
             # logging
-            logging.debug("Heatpump Consumption (/Ac/Power): %s" % (self._dbusservice['/Ac/Power']))
-            logging.debug("Heatpump Forward (/Ac/Energy/Forward): %s" % (self._dbusservice['/Ac/Energy/Forward']))
+            logging.debug("Operating State (/State): %s" % (self._dbusservice['/State']))
+            logging.debug("Flow Line Temperature (/Temperature): %s" % (self._dbusservice['/Temperature']))
+            logging.debug("Request Flow Line Temperature (/TargetTemperature): %s" % (self._dbusservice['/TargetTemperature']))
+            logging.debug("Power Consumption (/Ac/Power): %s" % (self._dbusservice['/Ac/Power']))
+            logging.debug("Total Energy Consumption (/Ac/Energy/Forward): %s" % (self._dbusservice['/Ac/Energy/Forward']))
             logging.debug("---")
 
             # increment UpdateIndex - to show that new data is available
