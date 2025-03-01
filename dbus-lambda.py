@@ -1,5 +1,27 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <http://www.gnu.org/licenses/>.
+#
+#  Please note that any incorrect or careless usage of this module as
+#  well as errors in the implementation can damage your hardware!
+#  Therefore, the author does not provide any guarantee or warranty
+#  concerning to correctness, functionality or performance and does not
+#  accept any liability for damage caused by this module, examples or
+#  mentioned information.
+#
+#  Thus, use it at your own risk!
 
 # import normal packages
 import logging
@@ -24,7 +46,7 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 class DbusLAMBDAService:
-    def __init__(self, servicename, paths, productname='lambda', connection='LAMBDA ModBus Service'):
+    def __init__(self, servicename, paths, productname='lambda', connection='LAMBDA Modbus Service'):
         config = self._getConfig()
         deviceinstance = int(config['DEFAULT']['Deviceinstance'])
         self.host = str(config['DEFAULT']['Host'])
@@ -67,13 +89,13 @@ class DbusLAMBDAService:
         # add _signOfLife 'timer' to get feedback in log every 5minutes
         gobject.timeout_add(self._getSignOfLifeInterval()*60*1000, self._signOfLife)
 
-        # open ModBus connection to heatpump
+        # open Modbus connection to heatpump
         self._client = ModbusTcpClient(self.host, port=self.port)
         self._client.connect()
-        logging.info("ModBus connected")
+        logging.info("Modbus connected")
 
     def __del__(self):
-        # close ModBus connection
+        # close Modbus connection
         self._client.close()
 
     def _getConfig(self):
