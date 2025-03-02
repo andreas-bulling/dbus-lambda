@@ -38,12 +38,12 @@ if sys.version_info.major == 2:
 else:
     from gi.repository import GLib as gobject
 
-# our own packages from victron
 sys.path.insert(1, os.path.join(os.path.dirname(__file__), '/opt/victronenergy/dbus-systemcalc-py/ext/velib_python'))
 from vedbus import VeDbusService
 
-from pymodbus.client.common import ModbusClientMixin
 from pymodbus.client.sync import ModbusTcpClient
+from pymodbus.constants import Endian
+from pymodbus.payload import BinaryPayloadDecoder
 from pymodbus.exceptions import ModbusException
 
 class DbusLAMBDAService:
@@ -122,56 +122,61 @@ class DbusLAMBDAService:
         if register == "state": # UINT16, works
             addr = 1003
             format = "H"
+            count = 1
             factor = 1
             comment = "Operating State"
             unit = ""
         elif register == "temp": # INT16, works
             addr = 1004
             format = "h"
+            count = 1
             factor = 0.01
             comment = "Flow Line Temperature"
             unit = "°C"
         elif register == "ttemp": # INT16, doesn't work
             addr = 1016
             format = "h"
+            count = 1
             factor = 0.1
             comment = "Request Flow Line Temperature"
             unit = "°C"
         elif register == "power": # INT16, works
             addr = 103
             format = "h"
+            count = 1
             factor = 1
             comment = "Power Consumption"
             unit = "W"
         elif register == "energy": # INT32, works
             addr = 1020
             format = "i"
+            count = 2
             factor = 0.001
             comment = "Total Energy Consumption"
             unit = "kWh"
-        
-        data_type = self._getDataType(format)
-        count = data_type.value[1]
-        var_type = data_type.name
-
-        logging.debug(f"Reading {comment} ({var_type})...")
         
         try:
             rr = self._client.read_holding_registers(address=addr, count=count, slave=1)
         except ModbusException as exc:
             logging.error(f"Modbus exception: {exc!s}")
-        
-        value = self._client.convert_from_registers(rr.registers, data_type) * factor
+
+        payload = BinaryPayloadDecoder.fromRegisters(rr.registers, byteorder=Endian.Big, wordorder=Endian.Big)
+        if register == "state": # UINT16, works
+            value = payload.decode_16bit_uint()
+        elif register == "temp": # INT16, works
+            value = payload.decode_16bit_int()
+        elif register == "ttemp": # INT16, doesn't work
+            value = payload.decode_16bit_int()
+        elif register == "power": # INT16, works
+            value = payload.decode_16bit_int()
+        elif register == "energy": # INT32, works
+            value = payload.decode_32bit_int()
+      
+        value = value * factor
         if factor < 1:
             value = round(value, int(log10(factor) * -1))
         logging.info(f"{comment} = {value} {unit}")
-
-    def _getDataType(self, format: str) -> Enum:
-        """Return the ModbusClientMixin.DATATYPE according to the format"""
-        for data_type in ModbusClientMixin.DATATYPE:
-            if data_type.value[0] == format:
-                return data_type
-    
+   
     def _signOfLife(self):
         logging.info("--- Start: sign of life ---")
         logging.info("Last _update() call: %s" % (self._lastUpdate))
