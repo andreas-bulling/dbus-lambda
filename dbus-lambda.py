@@ -115,7 +115,7 @@ class DbusLAMBDAService:
         return int(value)
     
     def _handlechangedvalue(self, path, value):
-        logging.critical("someone else updated %s to %s" % (path, value))
+        logging.critical("Someone else updated %s to %s" % (path, value))
         # TODO: handle changes
 
     def getLAMBDAData(self, register):
@@ -175,7 +175,7 @@ class DbusLAMBDAService:
         value = value * factor
         if factor < 1:
             value = round(value, int(log10(factor) * -1))
-        logging.info(f"{comment} = {value} {unit}")
+        logging.debug(f"{comment} = {value} {unit}")
    
     def _signOfLife(self):
         logging.info("--- Start: sign of life ---")
