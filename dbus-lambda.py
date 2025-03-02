@@ -69,8 +69,8 @@ class DbusLAMBDAService:
         # Create the mandatory objects
         self._dbusservice.add_path('/DeviceInstance', deviceinstance)
         self._dbusservice.add_path('/ProductId', 0xFFFF)
-        self._dbusservice.add_path('/ProductName', "Lamba Heat Pump")
-        self._dbusservice.add_path('/CustomName', "Lamba Heat Pump")
+        self._dbusservice.add_path('/ProductName', "LAMBDA " + self.model)
+        self._dbusservice.add_path('/CustomName', "LAMBDA " + self.model)
         self._dbusservice.add_path('/FirmwareVersion', "0")
         self._dbusservice.add_path('/Serial', "0")
         self._dbusservice.add_path('/HardwareVersion', self.model)
@@ -88,7 +88,7 @@ class DbusLAMBDAService:
         # add _update function 'timer'
         gobject.timeout_add(self.timeout, self._update) # pause before the next request
 
-        # add _signOfLife 'timer' to get feedback in log every 5minutes
+        # add _signOfLife 'timer' to get feedback in log every x minutes
         gobject.timeout_add(self._getSignOfLifeInterval()*60*1000, self._signOfLife)
 
         # open Modbus connection to heatpump
@@ -176,6 +176,8 @@ class DbusLAMBDAService:
         if factor < 1:
             value = round(value, int(log10(factor) * -1))
         logging.debug(f"{comment} = {value} {unit}")
+
+        return value
    
     def _signOfLife(self):
         logging.info("--- Start: sign of life ---")
