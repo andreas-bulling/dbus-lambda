@@ -131,14 +131,14 @@ class DbusLAMBDAService:
             format = "h"
             count = 1
             factor = 0.01
-            comment = "Flow Line Temperature"
+            comment = "Flow Temperature"
             unit = "°C"
         elif register == "ttemp": # INT16, doesn't work
             addr = 1016
             format = "h"
             count = 1
             factor = 0.1
-            comment = "Request Flow Line Temperature"
+            comment = "Request Flow Temperature"
             unit = "°C"
         elif register == "power": # INT16, works
             addr = 103
@@ -152,7 +152,7 @@ class DbusLAMBDAService:
             format = "i"
             count = 2
             factor = 0.001
-            comment = "Total Energy Consumption"
+            comment = "Total Energy"
             unit = "kWh"
         
         try:
@@ -196,10 +196,10 @@ class DbusLAMBDAService:
 
             # logging
             logging.debug("Operating State (/State): %s" % (self._dbusservice['/State']))
-            logging.debug("Flow Line Temperature (/Temperature): %s" % (self._dbusservice['/Temperature']))
-            logging.debug("Request Flow Line Temperature (/TargetTemperature): %s" % (self._dbusservice['/TargetTemperature']))
+            logging.debug("Flow Temperature (/Temperature): %s" % (self._dbusservice['/Temperature']))
+            logging.debug("Request Flow Temperature (/TargetTemperature): %s" % (self._dbusservice['/TargetTemperature']))
             logging.debug("Power Consumption (/Ac/Power): %s" % (self._dbusservice['/Ac/Power']))
-            logging.debug("Total Energy Consumption (/Ac/Energy/Forward): %s" % (self._dbusservice['/Ac/Energy/Forward']))
+            logging.debug("Total Energy (/Ac/Energy/Forward): %s" % (self._dbusservice['/Ac/Energy/Forward']))
             logging.debug("---")
 
             # increment UpdateIndex - to show that new data is available
