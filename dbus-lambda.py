@@ -53,6 +53,7 @@ class DbusLAMBDAService:
         self.port = int(config['DEFAULT']['Port'])
         self.acposition = int(config['DEFAULT']['Position'])
         self.model = str(config['DEFAULT']['Model'])
+        self.timeout = int(config['DEFAULT']['Timeout'])
 
         self._dbusservice = VeDbusService("{}.http_{:02d}".format(servicename, deviceinstance))
         self._paths = paths
@@ -84,7 +85,7 @@ class DbusLAMBDAService:
         self._lastUpdate = 0
 
         # add _update function 'timer'
-        gobject.timeout_add(1000, self._update) # pause 250ms before the next request
+        gobject.timeout_add(self.timeout, self._update) # pause before the next request
 
         # add _signOfLife 'timer' to get feedback in log every 5minutes
         gobject.timeout_add(self._getSignOfLifeInterval()*60*1000, self._signOfLife)
