@@ -42,7 +42,8 @@ else:
 sys.path.insert(1, os.path.join(os.path.dirname(__file__), '/opt/victronenergy/dbus-systemcalc-py/ext/velib_python'))
 from vedbus import VeDbusService
 
-from pymodbus.client import ModbusTcpClient
+from pymodbus.client.common import ModbusClientMixin
+from pymodbus.client.sync import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 class DbusLAMBDAService:
@@ -62,7 +63,7 @@ class DbusLAMBDAService:
 
         # Create the management objects, as specified in the ccgx dbus-api document
         self._dbusservice.add_path('/Mgmt/ProcessName', __file__)
-        self._dbusservice.add_path('/Mgmt/ProcessVersion', 'Unkown version, and running on Python ' + platform.python_version())
+        self._dbusservice.add_path('/Mgmt/ProcessVersion', 'Unknown version, running on Python ' + platform.python_version())
         self._dbusservice.add_path('/Mgmt/Connection', connection)
 
         # Create the mandatory objects
@@ -166,8 +167,8 @@ class DbusLAMBDAService:
         logging.info(f"{comment} = {value} {unit}")
 
     def _getDataType(self, format: str) -> Enum:
-        """Return the ModbusTcpClient.DATATYPE according to the format"""
-        for data_type in ModbusTcpClient.DATATYPE:
+        """Return the ModbusClientMixin.DATATYPE according to the format"""
+        for data_type in ModbusClientMixin.DATATYPE:
             if data_type.value[0] == format:
                 return data_type
     
