@@ -1,6 +1,10 @@
 # dbus-lambda
 LAMBDA heat pump integration for Victron Venus OS
 
+> [!WARNING]
+> This repository has been migrated to Codeberg and will not be updated anymore.
+> Find the new repository here: https://codeberg.org/andreas-bulling/dbus-lambda
+
 ## Purpose
 This script supports reading values from heat pumps produced by LAMBDA/Zewotherm via Modbus.
 Currently supported are: operating state, flow temperature, power consumption, total energy.
